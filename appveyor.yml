@@ -5,6 +5,7 @@ environment:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       CMAKE_GENERATOR: Visual Studio 14 2015
       TOOLSET: 140
+      MDBX_PYTHON_BINDINGS: ON
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       CMAKE_GENERATOR: Visual Studio 16 2019
       TOOLSET: 142
@@ -14,6 +15,7 @@ environment:
       CMAKE_GENERATOR: Visual Studio 16 2019
       TOOLSET: 142
       MDBX_BUILD_SHARED_LIBRARY: ON
+      MDBX_PYTHON_BINDINGS: ON
       MDBX_WITHOUT_MSVC_CRT: ON
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       CMAKE_GENERATOR: Visual Studio 16 2019
@@ -24,10 +26,12 @@ environment:
       CMAKE_GENERATOR: Visual Studio 16 2019
       TOOLSET: 142
       MDBX_BUILD_SHARED_LIBRARY: ON
+      MDBX_PYTHON_BINDINGS: ON
       MDBX_WITHOUT_MSVC_CRT: OFF
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
       CMAKE_GENERATOR: Visual Studio 15 2017
       TOOLSET: 141
+      MDBX_PYTHON_BINDINGS: ON
 
 branches:
   except:
@@ -80,18 +84,16 @@ build_script:
         if ($env:PLATFORM -eq "x64") {
             $generator = "$generator Win64"
         }
-        & cmake -G "$generator" -D CMAKE_CONFIGURATION_TYPES="Debug;Release;RelWithDebInfo" -D MDBX_WITHOUT_MSVC_CRT:BOOL=$env:MDBX_WITHOUT_MSVC_CRT -D MDBX_BUILD_SHARED_LIBRARY:BOOL=$env:MDBX_BUILD_SHARED_LIBRARY -D MDBX_PYTHON_BINDINGS:BOOL=ON ..
+        & cmake -G "$generator" -D CMAKE_CONFIGURATION_TYPES="Debug;Release;RelWithDebInfo" -D MDBX_WITHOUT_MSVC_CRT:BOOL=$env:MDBX_WITHOUT_MSVC_CRT -D MDBX_BUILD_SHARED_LIBRARY:BOOL=$env:MDBX_BUILD_SHARED_LIBRARY -D MDBX_PYTHON_BINDINGS:BOOL=$env:MDBX_PYTHON_BINDINGS ..
     } else {
-        & cmake -G "$generator" -A $env:PLATFORM -D CMAKE_CONFIGURATION_TYPES="Debug;Release;RelWithDebInfo" -DMDBX_WITHOUT_MSVC_CRT:BOOL=$env:MDBX_WITHOUT_MSVC_CRT -D MDBX_BUILD_SHARED_LIBRARY:BOOL=$env:MDBX_BUILD_SHARED_LIBRARY -D MDBX_PYTHON_BINDINGS:BOOL=ON ..
+        & cmake -G "$generator" -A $env:PLATFORM -D CMAKE_CONFIGURATION_TYPES="Debug;Release;RelWithDebInfo" -DMDBX_WITHOUT_MSVC_CRT:BOOL=$env:MDBX_WITHOUT_MSVC_CRT -D MDBX_BUILD_SHARED_LIBRARY:BOOL=$env:MDBX_BUILD_SHARED_LIBRARY -D MDBX_PYTHON_BINDINGS:BOOL=$env:MDBX_PYTHON_BINDINGS ..
     }
-    if ($LastExitCode -ne 0) {
-        throw "Exec: $ErrorMessage"
-    }
-    Write-Output "*******************************************************************************"
-
-    & cmake --build . --config $env:CONFIGURATION
-    if ($LastExitCode -ne 0) {
-        throw "Exec: $ErrorMessage"
+    if ($LastExitCode -eq 0) {
+        Write-Output "*******************************************************************************"
+        & cmake --build . --config $env:CONFIGURATION
+        if ($env:MDBX_PYTHON_BINDINGS -eq "ON") {
+            & cmake --build . --config $env:CONFIGURATION --target python-wheel
+        }
     }
     Write-Output "*******************************************************************************"
 
@@ -104,6 +106,9 @@ test_script:
             throw "Exec: $ErrorMessage"
         } else {
             & ./$env:CONFIGURATION/mdbx_chk.exe -nvv test.db | Tee-Object -file chk.log | Select-Object -last 42
+            if ($env:MDBX_PYTHON_BINDINGS -eq "ON") {
+                & cmake --build . --config $env:CONFIGURATION --target python-test
+            }
         }
     }
 
