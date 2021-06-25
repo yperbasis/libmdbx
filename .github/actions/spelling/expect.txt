@@ -1257,6 +1257,7 @@ PWOF
 pwrite
 pwritev
 pwsh
+pybind
 pymdownx
 pytest
 pyw

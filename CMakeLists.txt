@@ -436,7 +436,7 @@ add_mdbx_option(MDBX_INSTALL_STATIC "Build and install libmdbx for static linkin
 add_mdbx_option(MDBX_BUILD_SHARED_LIBRARY "Build libmdbx as shared library (DLL)" ${BUILD_SHARED_LIBS})
 add_mdbx_option(MDBX_BUILD_TOOLS "Build MDBX tools (mdbx_chk/stat/dump/load/copy)" ${MDBX_BUILD_TOOLS_DEFAULT})
 CMAKE_DEPENDENT_OPTION(MDBX_INSTALL_MANPAGES "Install man-pages for MDBX tools (mdbx_chk/stat/dump/load/copy)" ON MDBX_BUILD_TOOLS OFF)
-CMAKE_DEPENDENT_OPTION(MDBX_PYTHON_BINDINGS "Build the Python 3 bindings" ON MDBX_BUILD_SHARED_LIBRARY OFF)
+CMAKE_DEPENDENT_OPTION(MDBX_PYTHON_BINDINGS "Build the Python 3 bindings" OFF MDBX_BUILD_SHARED_LIBRARY OFF)
 add_mdbx_option(MDBX_TXN_CHECKOWNER "Checking transaction matches the calling thread inside libmdbx's API" ON)
 add_mdbx_option(MDBX_ENV_CHECKPID "Paranoid checking PID inside libmdbx's API" AUTO)
 mark_as_advanced(MDBX_ENV_CHECKPID)
@@ -872,85 +872,69 @@ if(NOT MDBX_AMALGAMATED_SOURCE AND MDBX_ENABLE_TESTS)
 endif()
 
 ################################################################################
+# python bindings: This is temporary part and subject to replace with python's native `distutils.core`
 
 if(MDBX_PYTHON_BINDINGS)
+  if(CMAKE_VERSION VERSION_LESS 3.14)
+    message(FATAL_ERROR "Python bindings require CMake version >= 3.14")
+  endif()
   if (NOT MDBX_BUILD_SHARED_LIBRARY)
     message(SEND_ERROR "Python bindings require libmdbx to be built as a shared library.")
   endif()
-  if (NOT PYTEST)
-    find_program(PYTEST pytest)
-    #message(FATAL_ERROR "PYTEST: ${PYTEST}")
-    if (PYTEST-NOTFOUND)
-      find_program(PYTEST pytest-3)
-      if(NOT PYTEST)
-        set(
-          PYTEST
-          python3 -m pytest
-          )
-      endif()
-    endif()
-  endif()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter) # Development
 
-  set(MDBX_BUILD_DIR_LIB_LOCATION
-    $<TARGET_FILE:mdbx>
-    )
+  # FIXME: The SOURCE directory should not be cluttered with generated files
+  #        that depend on the build parameters.
+  #        E.g this will break cross-compilation and builds for different
+  #        platforms from the single copy of code.
+  #
+  #        Moreover the another problem = python code should refer to the
+  #        installed libmdbx.so, but not to a build's temporary artifact(s).
+  set(MDBX_SOLIB_LOCATION "$<TARGET_FILE:mdbx>")
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py.in-cmake" ESCAPE_QUOTES)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py" ESCAPE_QUOTES)
 
-  add_custom_target(
-    python-prep
-    COMMAND sed 's|@LIBLOCATION@|${CMAKE_INSTALL_PREFIX}/${MDBX_DLL_INSTALL_DESTINATION}/${mdbx}|' python/libmdbx/mdbx.py.in > python/libmdbx/mdbx.py
-    COMMAND sed 's|@MDBX_VERSION@|${MDBX_VERSION}|' python/libmdbx/setup.py.in > python/libmdbx/setup.py
-    COMMENT Prepare python bindings
-    )
+  file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py"
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py.in-cmake")
+  file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/tests/mdbx4test.py"
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py.in-cmake")
 
   add_custom_target(
-    python-test-prep
-    COMMAND sed 's|@LIBLOCATION@|${MDBX_BUILD_DIR_LIB_LOCATION}|' python/libmdbx/mdbx.py.in > python/libmdbx/mdbx.py
-    COMMENT set the DLL path to the built dll in the build dir
-    DEPENDS mdbx
-    )
-
-  add_custom_target(
-    python-test
-    COMMAND ${PYTEST}
-    COMMENT test python bindings
-    WORKING_DIRECTORY python
-    DEPENDS python-test-prep
-    )
+    python-wheel
+    SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/mdbx.py" "${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py"
+    COMMAND ${Python3_EXECUTABLE} -m build
+    COMMENT build python wheel of the bindings
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/python"
+    DEPENDS mdbx)
 
   add_custom_target(
     python-install
-    COMMAND python setup.py install --root="$CMAKE_INSTALL_PREFIX"
+    SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py"
+    COMMAND ${Python3_EXECUTABLE} setup.py install --root="$CMAKE_INSTALL_PREFIX"
     COMMENT package python bindings
-    WORKING_DIRECTORY python
-    )
+    DEPENDS python-wheel
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/python")
 
   add_custom_target(
-    python-wheel
-    COMMAND python3 -m build
-    COMMENT build python wheel of the bindings
-    WORKING_DIRECTORY python
-    )
-
-  add_custom_target(
-    python-clean
-    COMMAND python3 setup.py clean --all
-    WORKING_DIRECTORY python
-    )
-
-  add_custom_target(
-    python
-    )
-
-  add_dependencies(
-    distclean
-    python-clean
-    )
-
-  add_dependencies(
-    python
     python-test
-    python-wheel
-    )
+    SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/tests/mdbx4test.py"
+    COMMAND ${Python3_EXECUTABLE} runme.py
+    COMMENT test python bindings
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/python/libmdbx/tests")
+
+  add_custom_target(
+    python-clean
+    SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py"
+    COMMAND ${Python3_EXECUTABLE} setup.py clean --all
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/python")
+  add_dependencies(distclean python-clean)
+
+  add_custom_target(python-all)
+  add_dependencies(python-all python-test python-wheel)
 endif()
 
 set(PACKAGE "libmdbx")

@@ -47,8 +47,6 @@ LIBS    ?= $(shell uname | grep -qi SunOS && echo "-lkstat") $(shell uname | gre
 LDFLAGS ?= $(shell $(LD) --help 2>/dev/null | grep -q -- --gc-sections && echo '-Wl,--gc-sections,-z,relro,-O1')$(shell $(LD) --help 2>/dev/null | grep -q -- -dead_strip && echo '-Wl,-dead_strip')
 EXE_LDFLAGS ?= -pthread
 
-PYTEST ?= $(shell if command -v pytest >/dev/null ; then echo pytest ; elif command -v pytest-3 >/dev/null; then echo pytest-3 ; else echo python3 -m pytest ; fi)
-
 ################################################################################
 
 UNAME      := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -64,9 +62,8 @@ HEADERS    := mdbx.h mdbx.h++
 LIBRARIES  := libmdbx.a libmdbx.$(SO_SUFFIX)
 TOOLS      := mdbx_stat mdbx_copy mdbx_dump mdbx_load mdbx_chk mdbx_drop
 MANPAGES   := mdbx_stat.1 mdbx_copy.1 mdbx_dump.1 mdbx_load.1 mdbx_chk.1 mdbx_drop.1
-BINDINGS   := python
 
-.PHONY: all help options lib tools clean install uninstall python
+.PHONY: all help options lib tools clean install uninstall
 .PHONY: install-strip install-no-strip strip libmdbx mdbx show-options
 
 ifeq ("$(origin V)", "command line")
@@ -107,7 +104,6 @@ help:
 	@echo "  make bench-triplet       - run ioarena-benchmark for mdbx, lmdb, sqlite3"
 	@echo "  make bench-quartet       - run ioarena-benchmark for mdbx, lmdb, rocksdb, wiredtiger"
 	@echo "  make bench-clean         - remove temp database(s) after benchmark"
-	@echo "  make python              - Generate python bindings"
 #> dist-cutoff-begin
 	@echo ""
 	@echo "  make test                - basic test"
@@ -559,38 +555,41 @@ dist/man1/mdbx_%.1: src/man1/mdbx_%.1
 
 endif
 
-python: python-test python-wheel
+################################################################################
+# python bindings: This is temporary part and subject to replace with python's native `distutils.core`
 
-# Python bindings generation
-python/libmdbx/mdbx.py:
-	@echo '  GENERATING PYTHON BINDINGS'
-	$(QUIET)sed 's|@LIBLOCATION@|$(prefix)/libmdbx.$(SO_SUFFIX)|' python/libmdbx/mdbx.py.in > python/libmdbx/mdbx.py
+PYTHON3 ?= python3
+.PHONY: python-test python-wheel python-clean python-install python-all
+python-all: python-test python-wheel
 
-python-test-prep:
-	@echo '  PREPARING PYTHON BINDINGS FOR TEST'
-	$(QUIET)sed 's|@LIBLOCATION@|$(abspath .)/libmdbx.$(SO_SUFFIX)|' python/libmdbx/mdbx.py.in > python/libmdbx/mdbx.py
+python/libmdbx/mdbx.py: python/libmdbx/mdbx.py.in
+	@echo '  POKE solib location into $@'
+	$(QUIET)sed 's|@MDBX_SOLIB_LOCATION@|$(prefix)/lib$(suffix)/libmdbx.$(SO_SUFFIX)|' $< >$@
 
-python-test: python-test-prep libmdbx.$(SO_SUFFIX)
-	@echo ' TESTING PYTHON BINDINGS'
-	cd python/libmdbx &&	$(PYTEST)
+python/setup.py: python/setup.py.in
+	@echo '  POKE version into $@'
+	$(QUIET)sed 's|@MDBX_VERSION@|${MDBX_GIT_VERSION}|' $< >$@
 
-python-prep-setup:
-	@echo ' SETTING WHEEL VERSION'
-	$(QUIET)sed 's|@MDBX_VERSION@|${MDBX_GIT_VERSION}|' python/libmdbx/setup.py.in > python/libmdbx/setup.py
+python-wheel: python/libmdbx/mdbx.py python/setup.py
+	@echo '  CREATE python bindings wheel'
+	$(QUIET)cd python && $(PYTHON3) -m build >$@.log
 
-python-wheel: python/libmdbx/mdbx.py python-prep-setup
-	@echo ' GENERATING PYTHON WHEEL'
-	cd python/libmdbx && python3 -m build
+python-clean: python/libmdbx/mdbx.py python/setup.py
+	@echo '  CLEAN python bindings directories'
+	$(QUIET)cd python && $(PYTHON3) setup.py clean --all >$@.log
 
-python-clean: python-prep-setup
-	@echo 'CLEANING PYTHON DIRECTORY'
-	cd python/libmdbx && python3 setup.py clean --all
+python-install: python/libmdbx/mdbx.py python/setup.py
+	@echo '  INSTALLING python bindings'
+	$(QUIET)cd python && $(PYTHON3) setup.py install --root="$(abspath $(DESTDIR)/)" >$@.log
 
-python-install: python/libmdbx/mdbx.py python-prep-setup
-	@echo 'INSTALLING PYTHON BINDINGS'
-	cd python/libmdbx && python3 setup.py install --root="$(DESTDIR)"
+# python bindings test: This is temporary part and subject to replace with python's native `distutils.core`
+python/libmdbx/tests/mdbx4test.py: python/libmdbx/mdbx.py.in libmdbx.$(SO_SUFFIX)
+	@echo '  POKE solib location into $@'
+	$(QUIET)sed 's|@MDBX_SOLIB_LOCATION@|$(abspath libmdbx.$(SO_SUFFIX))|' $< >$@
 
-.PHONY: python-test python-test-prep python python/libmdbx/mdbx.py python-prep-setup
+python-test: python/libmdbx/tests/runme.py python/libmdbx/tests/mdbx4test.py
+	@echo -n '  RUN $<...'
+	$(QUIET)$(PYTHON3) python/libmdbx/tests/runme.py >$@.log 2>&1 && echo " Done" || echo "Fail"
 
 ################################################################################
 # Cross-compilation simple test

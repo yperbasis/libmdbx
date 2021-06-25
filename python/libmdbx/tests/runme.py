@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python3
 # Copyright 2021 Noel Kuntze <noel.kuntze@contauro.com> for Contauro AG
 #
 # Redistribution and use in source and binary forms, with or without
@@ -12,17 +12,18 @@
 import ctypes
 import inspect
 
-import libmdbx
+import mdbx4test as libmdbx
+
 import subprocess
 import random
 import unittest
-
 import os
 import string
 import threading
 import time
+import tempfile
 
-MDBX_TEST_DIR="%s/MDBX_TEST" % os.path.dirname(__file__)
+MDBX_TEST_DIR="%s/MDBX_TEST" % tempfile.gettempdir()
 MDBX_TEST_DB_NAME="MDBX_TEST_DB_NAME"
 MDBX_TEST_MAP_NAME="MDBX_TEST_MAP_NAME"
 MDBX_TEST_KEY=bytes("MDBX_TEST_KEY", "utf-8")

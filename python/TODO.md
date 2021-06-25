@@ -8,11 +8,16 @@ Incomplete TODO list to merge `python-bindings` (status: draft) branch to the `m
 
 1.
 
- - [ ] cmake: enable python binding only for cmake >= 3.14 and warn otherwise (but we unable change the requirement for minimal cmake version).
- - [ ] cmake: use `FindPython()` instead of calling `python` directly.
- - [ ] cmake: always use `python3 -m pytest` instead of finding `pytest`, since such way is fragile and unportable.
- - [ ] cmake: replace using `sed` by CMake's `configure_file()`.
+ - [x] cmake: enable python binding only for cmake >= 3.14 and warn otherwise (but we unable change the requirement for minimal cmake version).
+ - [x] cmake: use `FindPython()` instead of calling `python` directly.
+ - [x] cmake: always use `python3 -m pytest` instead of finding `pytest`, since such way is fragile and unportable.
+ - [x] cmake: replace using `sed` by CMake's `configure_file()`.
  - [ ] cmake: seems CMake have some useful features for python than we should use instead of custom targets.
+ - [ ] python: no build-depend files should be created inside `${CMAKE_CURRENT_SOURCE_DIR}`, but only `${CMAKE_CURRENT_BINARY_DIR}` instead.
+ - [ ] python: should should refer to the installed libmdbx.so, but not to a build's temporary artifact(s).
+ - [ ] python: A different package name must be chosen, otherwise there is confusion with the generally accepted names of source code archives (and someone should be reserved for full C++ bindings by pybind11).
+ - [ ] create README.md
+ - [ ] egg/wheel: ability to build & install library from pip.
 
 2.
 
