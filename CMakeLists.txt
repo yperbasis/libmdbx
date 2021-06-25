@@ -436,6 +436,7 @@ add_mdbx_option(MDBX_INSTALL_STATIC "Build and install libmdbx for static linkin
 add_mdbx_option(MDBX_BUILD_SHARED_LIBRARY "Build libmdbx as shared library (DLL)" ${BUILD_SHARED_LIBS})
 add_mdbx_option(MDBX_BUILD_TOOLS "Build MDBX tools (mdbx_chk/stat/dump/load/copy)" ${MDBX_BUILD_TOOLS_DEFAULT})
 CMAKE_DEPENDENT_OPTION(MDBX_INSTALL_MANPAGES "Install man-pages for MDBX tools (mdbx_chk/stat/dump/load/copy)" ON MDBX_BUILD_TOOLS OFF)
+CMAKE_DEPENDENT_OPTION(MDBX_PYTHON_BINDINGS "Build the Python 3 bindings" ON MDBX_BUILD_SHARED_LIBRARY OFF)
 add_mdbx_option(MDBX_TXN_CHECKOWNER "Checking transaction matches the calling thread inside libmdbx's API" ON)
 add_mdbx_option(MDBX_ENV_CHECKPID "Paranoid checking PID inside libmdbx's API" AUTO)
 mark_as_advanced(MDBX_ENV_CHECKPID)
@@ -862,8 +863,10 @@ endif()
 
 ################################################################################
 
-option(MDBX_PYTHON_BINDINGS "Build the Python 3 bindings" OFF)
 if(MDBX_PYTHON_BINDINGS)
+  if (NOT MDBX_BUILD_SHARED_LIBRARY)
+    message(SEND_ERROR "Python bindings require libmdbx to be built as a shared library.")
+  endif()
   if (NOT PYTEST)
     find_program(PYTEST pytest)
     #message(FATAL_ERROR "PYTEST: ${PYTEST}")
