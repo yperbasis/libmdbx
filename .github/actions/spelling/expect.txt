@@ -441,6 +441,7 @@ erasevolume
 EREMOTE
 EROFS
 errcode
+errmsg
 errno
 errnum
 ERRORCHECK
@@ -1113,6 +1114,7 @@ ORing
 ormat
 orward
 osal
+OSerror
 osf
 OSs
 ostream
