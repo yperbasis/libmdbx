@@ -70,7 +70,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" AND
     message(SEND_ERROR "Git command-line tool not found")
   endif()
   set(MDBX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" AND
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt" AND
     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mdbx.c" AND
     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mdbx.c++" AND
     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in" AND
@@ -540,6 +540,13 @@ else()
   message(STATUS "Use C${MDBX_C_STANDARD} for libmdbx but C++ portion is disabled")
 endif()
 
+if(SUBPROJECT AND MSVC)
+  if(MSVC_VERSION LESS 1900)
+    message(FATAL_ERROR "At least \"Microsoft C/C++ Compiler\" version 19.0.24234.1 (Visual Studio 2015 Update 3) is required.")
+  endif()
+  add_compile_options("/utf-8")
+endif()
+
 macro(target_setup_options TARGET)
   if(DEFINED INTERPROCEDURAL_OPTIMIZATION)
     set_target_properties(${TARGET} PROPERTIES
@@ -550,6 +557,9 @@ macro(target_setup_options TARGET)
   if(MDBX_BUILD_CXX)
     set_target_properties(${TARGET} PROPERTIES
       CXX_STANDARD ${MDBX_CXX_STANDARD} CXX_STANDARD_REQUIRED ON)
+    if(MSVC AND NOT MSVC_VERSION LESS 1910)
+      target_compile_options(${TARGET} INTERFACE "/Zc:__cplusplus")
+    endif()
   endif()
   if(CC_HAS_FASTMATH)
     target_compile_options(${TARGET} PRIVATE "-ffast-math")
@@ -558,7 +568,7 @@ macro(target_setup_options TARGET)
     target_compile_options(${TARGET} PRIVATE "-fvisibility=hidden")
   endif()
   if(BUILD_FOR_NATIVE_CPU AND CC_HAS_ARCH_NATIVE)
-    target_compile_options(${TARGET} PUBLIC "-march=native")
+    target_compile_options(${TARGET} PRIVATE "-march=native")
   endif()
 endmacro()
 
